@@ -62,7 +62,7 @@ class WiFiDevice(object):
     count = 0
     comment = ""
     oui = ""
-    networks = { "", 0 }
+    networks = { }
     
     def key(self):
         return self.mac
@@ -74,24 +74,27 @@ class WiFiDevice(object):
 
 def make_wifi_device(mac, oui):
     device = WiFiDevice()
+    # only the follwoing fields will be present in devices.json before assignment
     device.mac = mac
     device.oui = oui
     device.last_seen = time.time()
-    device.networks = { "" : 0 }
     device.networks = { }
+    device.airtime = 0.0
+    device.comment = ""
     return device
 
 devices = { }
 
 def load_devices():
-    with open('devices.json', "r") as file_read:
+    with open('devices.json', "r") as file_read:        
         content = file_read.read()
         device_list = jsonpickle.decode(content)
         return device_list
 
 def save_devices(device_list):
     with open('devices.json', "w") as file_write:
-        content = jsonpickle.encode(device_list)
+        sorted_devices = sorted(device_list, key=lambda d : d.airtime, reverse=False)
+        content = jsonpickle.encode(sorted_devices)
         file_write.write(content)
         print("persisted %d devices to devices.json" % len(device_list))
 
