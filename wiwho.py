@@ -99,7 +99,7 @@ def save_devices(device_list):
         print("persisted %d devices to devices.json" % len(device_list))
 
 def print_devices(devices):
-    sorted_devices = sorted(devices.values(), key=lambda d : d.mac, reverse=False)
+    sorted_devices = sorted(devices.values(), key=lambda d : d.last_seen, reverse=False)
     for device in sorted_devices:
         if (device.airtime > 30):
             print(device.text())
@@ -181,7 +181,6 @@ command.extend(["-T", "fields"])
 command.extend(["-e", "wlan.sa"])
 command.extend(["-e", "wlan.tag.oui"])
 command.extend(["-e", "wlan.ssid"])
-command.extend(["-e", "radiotap.quality"])
 command.extend(["-e", "radiotap.dbm_antsignal"])
 command.extend(["-e", "radiotap.present.db_antnoise"])
 command.extend(["-e", "wlan.ext_tag"])
