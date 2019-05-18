@@ -54,7 +54,8 @@ hide_below_airtime = 10
 
 class WiFiDevice(object):
     mac = ""
-    last_seen = 0   # stamp in microseconds
+    last_seen = None   # stamp in microseconds
+    session_start = None
     # how many times did it reappear
     recurrence = 0
     # cumulated airtime
@@ -63,25 +64,45 @@ class WiFiDevice(object):
     comment = ""
     oui = ""
     networks = { }
+    sessions = [ ]
     
     def key(self):
         return self.mac
 
     def text(self):
        lastseen = time.strftime("%Y-%m-%d %H:%M", time.localtime(self.last_seen))
-       return "{0}, sum: {1:4.0f}s, last: {2}, show: {3}, oui: {4} - {5} {6}".format(self.mac, self.airtime, lastseen, self.recurrence, self.comment, self.oui, " ".join(self.networks))
+       return "{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, " ".join(self.networks))
 
-
+    
 def make_wifi_device(mac, oui):
     device = WiFiDevice()
     # only the follwoing fields will be present in devices.json before assignment
     device.mac = mac
     device.oui = oui
     device.last_seen = time.time()
+    device.session_start = device.last_seen
     device.networks = { }
+    device.sessions = [ ]
     device.airtime = 0.0
     device.comment = ""
     return device
+
+class Session(object):
+    begin = None
+    duration = None
+
+def make_session(begin, duration):
+    session = Session()
+    session.begin = begin
+    session.duration = duration
+    return session
+
+def new_session(node):
+    if node.session_start == None:
+        node.session_start = node.last_seen
+        return
+    duration = node.last_seen - node.session_start
+    node.sessions.append(make_session(node.session_start, duration))
 
 devices = { }
 
@@ -125,8 +146,9 @@ def sample(devices, mac, oui, network):
         if (span > absence):
             print("been away for {0}s - hello again {1}".format(span, node.text()))
             node.recurrence += 1
+            new_session(node)
         else:
-            node.airtime += span 
+            node.airtime += span
         node.count += 1
     else:
         node = make_wifi_device(mac, oui)
