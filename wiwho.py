@@ -36,12 +36,15 @@ from threading import Thread
 from sched import scheduler
 
 import logging
+from logging.handlers import RotatingFileHandler
 
 # nonstandard dependency. install with `python3 -m pip install jsonpickle`
 import jsonpickle
 
+from optparse import OptionParser
+
 tshark_binary = "/usr/bin/tshark"
-wifi_interface = "5"
+wifi_interface = "3"
 
 # milliseconds => seconds => 10s
 absence = 600
@@ -51,6 +54,9 @@ housekeeper_interval = 60
 
 # don't show devices with smaller airtime (seconds).
 hide_below_airtime = 10
+
+logger = logging.getLogger(__name__)
+events = logging.getLogger("events")
 
 class WiFiDevice(object):
     mac = ""
@@ -63,6 +69,7 @@ class WiFiDevice(object):
     count = 0
     comment = ""
     oui = ""
+    is_away = True
     networks = { }
     sessions = [ ]
     
@@ -71,7 +78,7 @@ class WiFiDevice(object):
 
     def text(self):
        lastseen = time.strftime("%Y-%m-%d %H:%M", time.localtime(self.last_seen))
-       return "{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, " ".join(self.networks))
+       return "{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, ",".join(self.networks))
 
     
 def make_wifi_device(mac, oui):
@@ -85,6 +92,8 @@ def make_wifi_device(mac, oui):
     device.sessions = [ ]
     device.airtime = 0.0
     device.comment = ""
+    # has the device been marked as absent?
+    device.is_away = True
     return device
 
 class Session(object):
@@ -117,20 +126,21 @@ def save_devices(device_list):
         sorted_devices = sorted(device_list, key=lambda d : d.airtime, reverse=False)
         content = jsonpickle.encode(sorted_devices)
         file_write.write(content)
-        print("persisted %d devices to devices.json" % len(device_list))
+        logger.info("persisted %d devices to devices.json" % len(device_list))
 
 def print_devices(devices):
     sorted_devices = sorted(devices.values(), key=lambda d : d.last_seen, reverse=False)
     for device in sorted_devices:
         if (device.airtime > 30):
-            print(device.text())
-    print("total number of devices %d" % len(devices))
-
+            logger.info(device.text())
+        if (device.is_away == False and device.last_seen < (time.time() - absence)):
+            events.info("contact lost to device: {}".format(device.text()))
+            device.is_away = True
+    logger.info("total number of devices %d" % len(devices))
 
 def run_housekeeper(interval, action, actionargs=()):
     s = scheduler(time.time, time.sleep)
     housekeeper(s, interval, action, actionargs)
-    print("starting scheduler")
     s.run()
 
 def housekeeper(scheduler, interval, action, actionargs=()):
@@ -144,22 +154,27 @@ def sample(devices, mac, oui, network):
         node.last_seen = time.time()
         span = node.last_seen - previous
         if (span > absence):
-            print("been away for {0}s - hello again {1}".format(span, node.text()))
+            logger.info("been away for {0}s - hello again {1}".format(span, node.text()))
             node.recurrence += 1
             new_session(node)
+            if device.is_away:
+                events.info("new session for device: {0}".format(node.text()))
         else:
             node.airtime += span
         node.count += 1
     else:
         node = make_wifi_device(mac, oui)
         devices[node.key()] = node
-        print("new wifi device encountered %s (%s)" % (mac, oui))
+        logger.info("new wifi device encountered %s (%s)" % (mac, oui))
+        events.info("new device discovered: {0}".format(node.text()));
 
     if len(network) > 0:
         entry = node.networks.get(network, 0)
         entry += 1
         node.networks[network] = entry
-        print("known networks {}".format(" ".join(node.networks.keys())))
+        logger.debug("known networks {}".format(",".join(node.networks.keys())))
+
+    node.is_away = False
     return node
 
 def tsharkoutput_handler(pipe):
@@ -168,32 +183,41 @@ def tsharkoutput_handler(pipe):
             for line in iter(pipe.readline, b''):
                 linestring = line.decode('utf-8').rstrip()
                 fields = linestring.split('\t')
-                print("|".join(fields))
+                logger.debug("|".join(fields))
                 device = sample(devices, fields[0], fields[1], fields[2])
 
     finally:
-        print("bailing out of processing loop")
+        logger.error("bailing out of processing loop")
 
 def stderr_handler(pipe):
     try:
         with pipe:
             for line in iter(pipe.readline, b''):
-                print("err: %s" % line.decode('utf-8').rstrip())
+                logger.error("err: %s" % line.decode('utf-8').rstrip())
     finally:
-        print("stderr reader done")
+        logger.info("stderr reader done")
 
-
+logging.basicConfig(format='%(asctime)s [%(levelname)5s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 try:
- 
     device_list = load_devices()
     for device in device_list:
-        print("loaded device {0}".format(device.text()))
+        logger.info("loaded device {0}".format(device.text()))
+        device.is_away = True
         devices[ device.key() ] = device
 except FileNotFoundError:
-    print("no 'devices.json' found. starting with empty list")
+    logger.warn("no 'devices.json' found. starting with empty list")
 except:
-    logging.exception('failed to load devices.json')
+    logger.exception('failed to load devices.json')
+
+parser = OptionParser()
+parser.add_option("-i", "--interface", dest="wifi_interface", help="interface to use", metavar="INTERFACE")
+
+(options, args) = parser.parse_args()
+
+eventLogHandler = RotatingFileHandler("event.log", backupCount=10)
+events.addHandler(eventLogHandler)
+
 
 command = [tshark_binary, "-i", wifi_interface]
 command.extend(["-l"])
@@ -208,13 +232,12 @@ command.extend(["-e", "radiotap.present.db_antnoise"])
 command.extend(["-e", "wlan.ext_tag"])
 
 #command = ["echo", "hi"] 
-print(command)
 
 line = " ".join(command)
-print(line)
+logger.debug("command {}".format(line))
 
 process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
-print("started subprocess with pid %d" % (process.pid))
+logger.debug("started subprocess with pid %d" % (process.pid))
 
 Thread(target=tsharkoutput_handler, args=[process.stdout]).start()
 Thread(target=stderr_handler, args=[process.stderr]).start()
@@ -227,11 +250,11 @@ scheduler_thread.start()
 try:
     process.wait()
 except KeyboardInterrupt:
-    print("CTRL-C stopping")
+    logger.warn("CTRL-C stopping")
 finally:
-    print("tshark suprocess ended")
+    logger.info("tshark suprocess ended")
 
-print("with returncode %s" % (process.returncode))
+logger.debug("with returncode %s" % (process.returncode))
 
 save_devices(list(devices.values()))
 
