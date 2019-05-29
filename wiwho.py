@@ -37,6 +37,7 @@ from sched import scheduler
 
 import logging
 from logging.handlers import RotatingFileHandler
+from logging import Formatter
 
 # nonstandard dependency. install with `python3 -m pip install jsonpickle`
 import jsonpickle
@@ -216,8 +217,8 @@ parser.add_option("-i", "--interface", dest="wifi_interface", help="interface to
 (options, args) = parser.parse_args()
 
 eventLogHandler = RotatingFileHandler("event.log", backupCount=10)
+eventLogHandler.setFormatter( Formatter('%(asctime)s [%(levelname)5s] %(message)s', '%Y-%m-%d %H:%M:%S') )
 events.addHandler(eventLogHandler)
-
 
 command = [tshark_binary, "-i", wifi_interface]
 command.extend(["-l"])
