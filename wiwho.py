@@ -78,10 +78,10 @@ class WiFiDevice(object):
         return self.mac
 
     def text(self):
-       lastseen = time.strftime("%Y-%m-%d %H:%M", time.localtime(self.last_seen))
-       return "{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, ",".join(self.networks))
+       lastseen = time.strftime(u"%Y-%m-%d %H:%M", time.localtime(self.last_seen))
+       return u"{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, u",".join(self.networks).encode('utf-8'))
 
-    
+
 def make_wifi_device(mac, oui):
     device = WiFiDevice()
     # only the follwoing fields will be present in devices.json before assignment
@@ -168,13 +168,13 @@ def sample(devices, mac, oui, network):
         devices[node.key()] = node
         logger.info("new wifi device encountered %s (%s)" % (mac, oui))
         events.info("new device discovered: {0}".format(node.text()));
-
+    
     if len(network) > 0:
         entry = node.networks.get(network, 0)
         entry += 1
         node.networks[network] = entry
-        logger.debug("known networks {}".format(",".join(node.networks.keys())))
-
+        logger.debug("known networks {}".format(u",".join(node.networks.keys()).encode('utf-8')))
+    
     node.is_away = False
     return node
 
@@ -184,7 +184,7 @@ def tsharkoutput_handler(pipe):
             for line in iter(pipe.readline, b''):
                 linestring = line.decode('utf-8').rstrip()
                 fields = linestring.split('\t')
-                logger.debug("|".join(fields))
+                logger.debug(u"|".join(fields).encode('utf-8'))
                 device = sample(devices, fields[0], fields[1], fields[2])
 
     finally:
@@ -198,7 +198,7 @@ def stderr_handler(pipe):
     finally:
         logger.info("stderr reader done")
 
-logging.basicConfig(format='%(asctime)s [%(levelname)5s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
+logging.basicConfig(format=u'%(asctime)s [%(levelname)5s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 try:
     device_list = load_devices()
@@ -206,10 +206,10 @@ try:
         logger.info("loaded device {0}".format(device.text()))
         device.is_away = True
         devices[ device.key() ] = device
-except FileNotFoundError:
-    logger.warn("no 'devices.json' found. starting with empty list")
-except:
-    logger.exception('failed to load devices.json')
+except IOError as error:
+    logger.warn("no 'devices.json' found. starting with empty list {}".format(error))
+except Exception as error:
+    logger.exception("failed to load devices.json".format(error))
 
 parser = OptionParser()
 parser.add_option("-i", "--interface", dest="wifi_interface", help="interface to use", metavar="INTERFACE")
@@ -217,7 +217,7 @@ parser.add_option("-i", "--interface", dest="wifi_interface", help="interface to
 (options, args) = parser.parse_args()
 
 eventLogHandler = RotatingFileHandler("event.log", backupCount=10)
-eventLogHandler.setFormatter( Formatter('%(asctime)s [%(levelname)5s] %(message)s', '%Y-%m-%d %H:%M:%S') )
+eventLogHandler.setFormatter( Formatter(u'%(asctime)s [%(levelname)5s] %(message)s', '%Y-%m-%d %H:%M:%S') )
 events.addHandler(eventLogHandler)
 
 command = [tshark_binary, "-i", wifi_interface]
