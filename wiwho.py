@@ -135,7 +135,7 @@ def print_devices(devices):
         if (device.airtime > 30):
             logger.info(device.text())
         if (device.is_away == False and device.last_seen < (time.time() - absence)):
-            events.info("contact lost to device: {}".format(device.text()))
+            events.info(u"contact lost to device: {}".format(device.text()))
             device.is_away = True
     logger.info("total number of devices %d" % len(devices))
 
@@ -155,25 +155,25 @@ def sample(devices, mac, oui, network):
         node.last_seen = time.time()
         span = node.last_seen - previous
         if (span > absence):
-            logger.info("been away for {0}s - hello again {1}".format(span, node.text()))
+            logger.info(u"been away for {0}s - hello again {1}".format(span, node.text()))
             node.recurrence += 1
             new_session(node)
             if device.is_away:
-                events.info("new session for device: {0}".format(node.text()))
+                events.info(u"new session for device: {0}".format(node.text()))
         else:
             node.airtime += span
         node.count += 1
     else:
         node = make_wifi_device(mac, oui)
         devices[node.key()] = node
-        logger.info("new wifi device encountered %s (%s)" % (mac, oui))
-        events.info("new device discovered: {0}".format(node.text()));
+        logger.info(u"new wifi device encountered %s (%s)" % (mac, oui))
+        events.info(u"new device discovered: {0}".format(node.text()));
     
     if len(network) > 0:
         entry = node.networks.get(network, 0)
         entry += 1
         node.networks[network] = entry
-        logger.debug("known networks {}".format(u",".join(node.networks.keys()).encode('utf-8')))
+        logger.debug(u"known networks {}".format(u",".join(node.networks.keys()).encode('utf-8')))
     
     node.is_away = False
     return node
@@ -183,8 +183,8 @@ def tsharkoutput_handler(pipe):
         with pipe:
             for line in iter(pipe.readline, b''):
                 linestring = line.decode('utf-8').rstrip()
-                fields = linestring.split('\t')
-                logger.debug(u"|".join(fields).encode('utf-8'))
+                fields = linestring.split(u'\t')
+                logger.debug(u'|'.join(fields).encode('utf-8'))
                 device = sample(devices, fields[0], fields[1], fields[2])
 
     finally:
@@ -194,22 +194,22 @@ def stderr_handler(pipe):
     try:
         with pipe:
             for line in iter(pipe.readline, b''):
-                logger.error("err: %s" % line.decode('utf-8').rstrip())
+                logger.error(u"err: %s" % line.decode('utf-8').rstrip())
     finally:
         logger.info("stderr reader done")
 
-logging.basicConfig(format=u'%(asctime)s [%(levelname)5s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
+logging.basicConfig(format=u'%(asctime)s [%(levelname)5s] %(message)s', datefmt=u'%Y-%m-%d %H:%M:%S', level=logging.DEBUG)
 
 try:
     device_list = load_devices()
     for device in device_list:
-        logger.info("loaded device {0}".format(device.text()))
+        logger.info(u"loaded device {0}".format(device.text()))
         device.is_away = True
         devices[ device.key() ] = device
 except IOError as error:
-    logger.warn("no 'devices.json' found. starting with empty list {}".format(error))
+    logger.warn(u"no 'devices.json' found. starting with empty list {}".format(error))
 except Exception as error:
-    logger.exception("failed to load devices.json".format(error))
+    logger.exception(u"failed to load devices.json".format(error))
 
 parser = OptionParser()
 parser.add_option("-i", "--interface", dest="wifi_interface", help="interface to use", metavar="INTERFACE")
@@ -217,7 +217,7 @@ parser.add_option("-i", "--interface", dest="wifi_interface", help="interface to
 (options, args) = parser.parse_args()
 
 eventLogHandler = RotatingFileHandler("event.log", backupCount=10)
-eventLogHandler.setFormatter( Formatter(u'%(asctime)s [%(levelname)5s] %(message)s', '%Y-%m-%d %H:%M:%S') )
+eventLogHandler.setFormatter( Formatter(u'%(asctime)s [%(levelname)5s] %(message)s', u'%Y-%m-%d %H:%M:%S') )
 events.addHandler(eventLogHandler)
 
 command = [tshark_binary, "-i", wifi_interface]
