@@ -172,7 +172,7 @@ def sample(devices, mac, oui, network):
     if len(network) > 0:
         entry = node.networks.get(network, 0)
         entry += 1
-        node.networks[network] = entry
+        node.networks[unicode(network)] = entry
         logger.debug(u"known networks {}".format(u",".join(node.networks.keys()).encode('utf-8')))
     
     node.is_away = False
