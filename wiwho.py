@@ -79,7 +79,7 @@ class WiFiDevice(object):
 
     def text(self):
        lastseen = time.strftime(u"%Y-%m-%d %H:%M", time.localtime(self.last_seen))
-       return u"{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, u",".join(self.networks).encode('utf-8'))
+       return u"{0}, sum: {1:4.0f}s, last: {2}, show: {3}, sessions: {4} '{5}' - {6} {7}".format(self.mac, self.airtime, lastseen, self.recurrence, len(self.sessions), self.comment, self.oui, u','.join(self.networks))
 
 
 def make_wifi_device(mac, oui):
@@ -172,8 +172,10 @@ def sample(devices, mac, oui, network):
     if len(network) > 0:
         entry = node.networks.get(network, 0)
         entry += 1
-        node.networks[unicode(network)] = entry
-        logger.debug(u"known networks {}".format(u",".join(node.networks.keys()).encode('utf-8')))
+        node.networks[unicode(network)] = entry 
+        nkeys = u','.join(node.networks.keys())
+        msg = u"known networks {}".format(nkeys)
+        logger.debug(msg)
     
     node.is_away = False
     return node
@@ -184,7 +186,7 @@ def tsharkoutput_handler(pipe):
             for line in iter(pipe.readline, b''):
                 linestring = line.decode('utf-8').rstrip()
                 fields = linestring.split(u'\t')
-                logger.debug(u'|'.join(fields).encode('utf-8'))
+                logger.debug(u'|'.join(fields))
                 device = sample(devices, fields[0], fields[1], fields[2])
 
     finally:
